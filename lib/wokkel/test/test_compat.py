@@ -6,19 +6,16 @@
 Tests for L{wokkel.compat}.
 """
 
-from zope.interface.verify import verifyObject
 from twisted.internet import defer, protocol
-from twisted.internet.interfaces import IProtocolFactory
 from twisted.trial import unittest
 from twisted.words.xish import domish, utility
-from twisted.words.protocols.jabber import xmlstream
-from wokkel.compat import toResponse, BootstrapMixin, XmlStreamServerFactory
+from wokkel.compat import toResponse, XmlStreamFactoryMixin
 
 class DummyProtocol(protocol.Protocol, utility.EventDispatcher):
     """
     I am a protocol with an event dispatcher without further processing.
 
-    This protocol is only used for testing BootstrapMixin to make
+    This protocol is only used for testing XmlStreamFactoryMixin to make
     sure the bootstrap observers are added to the protocol instance.
     """
 
@@ -30,29 +27,27 @@ class DummyProtocol(protocol.Protocol, utility.EventDispatcher):
         utility.EventDispatcher.__init__(self)
 
 
+class XmlStreamFactoryMixinTest(unittest.TestCase):
 
-class BootstrapMixinTest(unittest.TestCase):
-    """
-    Tests for L{BootstrapMixin}.
-
-    @ivar factory: Instance of the factory or mixin under test.
-    """
-
-    def setUp(self):
-        self.factory = BootstrapMixin()
-
-
-    def test_installBootstraps(self):
+    def test_buildProtocol(self):
         """
-        Dispatching an event should fire registered bootstrap observers.
+        Test building of protocol.
+
+        Arguments passed to Factory should be passed to protocol on
+        instantiation. Bootstrap observers should be setup.
         """
         d = defer.Deferred()
-        dispatcher = DummyProtocol()
-        self.factory.addBootstrap('//event/myevent', d.callback)
-        self.factory.installBootstraps(dispatcher)
-        dispatcher.dispatch(None, '//event/myevent')
-        return d
 
+        f = XmlStreamFactoryMixin(None, test=None)
+        f.protocol = DummyProtocol
+        f.addBootstrap('//event/myevent', d.callback)
+        xs = f.buildProtocol(None)
+
+        self.assertEquals(f, xs.factory)
+        self.assertEquals((None,), xs.args)
+        self.assertEquals({'test': None}, xs.kwargs)
+        xs.dispatch(None, '//event/myevent')
+        return d
 
     def test_addAndRemoveBootstrap(self):
         """
@@ -61,13 +56,13 @@ class BootstrapMixinTest(unittest.TestCase):
         def cb(self):
             pass
 
-        self.factory.addBootstrap('//event/myevent', cb)
-        self.assertIn(('//event/myevent', cb), self.factory.bootstraps)
+        f = XmlStreamFactoryMixin(None, test=None)
 
-        self.factory.removeBootstrap('//event/myevent', cb)
-        self.assertNotIn(('//event/myevent', cb), self.factory.bootstraps)
+        f.addBootstrap('//event/myevent', cb)
+        self.assertIn(('//event/myevent', cb), f.bootstraps)
 
-
+        f.removeBootstrap('//event/myevent', cb)
+        self.assertNotIn(('//event/myevent', cb), f.bootstraps)
 
 class ToResponseTest(unittest.TestCase):
 
@@ -126,59 +121,3 @@ class ToResponseTest(unittest.TestCase):
         stanza = domish.Element(('jabber:client', 'message'))
         response = toResponse(stanza)
         self.failIf(response.hasAttribute('id'))
-
-
-    def test_noType(self):
-        """
-        Test that a proper response is generated without type attribute.
-        """
-        stanza = domish.Element(('jabber:client', 'message'))
-        response = toResponse(stanza)
-        self.failIf(response.hasAttribute('type'))
-
-
-
-class XmlStreamServerFactoryTest(BootstrapMixinTest):
-    """
-    Tests for L{XmlStreamServerFactory}.
-    """
-
-    def setUp(self):
-        """
-        Set up a server factory with a authenticator factory function.
-        """
-        def authenticatorFactory():
-            return xmlstream.Authenticator()
-
-        self.factory = XmlStreamServerFactory(authenticatorFactory)
-
-
-    def test_interface(self):
-        """
-        L{XmlStreamServerFactory} is a L{Factory}.
-        """
-        verifyObject(IProtocolFactory, self.factory)
-
-
-    def test_buildProtocol(self):
-        """
-        The authenticator factory should be passed to its protocol and it
-        should instantiate the authenticator and save it.
-        L{xmlstream.XmlStream}s do that, but we also want to ensure it really
-        is one.
-        """
-        xs = self.factory.buildProtocol(None)
-        self.assertIdentical(self.factory, xs.factory)
-        self.assertIsInstance(xs, xmlstream.XmlStream)
-        self.assertIsInstance(xs.authenticator, xmlstream.Authenticator)
-
-
-    def test_buildProtocolTwice(self):
-        """
-        Subsequent calls to buildProtocol should result in different instances
-        of the protocol, as well as their authenticators.
-        """
-        xs1 = self.factory.buildProtocol(None)
-        xs2 = self.factory.buildProtocol(None)
-        self.assertNotIdentical(xs1, xs2)
-        self.assertNotIdentical(xs1.authenticator, xs2.authenticator)

@@ -358,7 +358,7 @@ class PubSubClient(XMPPHandler):
         @param nodeIdentifier: The identifier of the node.
         @type nodeIdentifier: C{unicode}
         """
-        request = _PubSubRequest(self.xmlstream, 'delete', NS_PUBSUB_OWNER)
+        request = _PubSubRequest(self.xmlstream, 'delete')
         request.command['node'] = nodeIdentifier
         return request.send(service)
 
@@ -702,11 +702,11 @@ class PubSubService(XMPPHandler, IQHandlerMixin):
         def toResponse(result):
             response = domish.Element((NS_PUBSUB, 'pubsub'))
             subscriptions = response.addElement('subscriptions')
-            for subscription in result:
+            for node, subscriber, state in result:
                 item = subscriptions.addElement('subscription')
-                item['node'] = subscription.nodeIdentifier
-                item['jid'] = subscription.subscriber.full()
-                item['subscription'] = subscription.state
+                item['node'] = node
+                item['jid'] = subscriber.full()
+                item['subscription'] = state
             return response
 
         d = self.subscriptions(requestor, service)

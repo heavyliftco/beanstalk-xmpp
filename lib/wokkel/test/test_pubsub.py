@@ -245,9 +245,9 @@ class PubSubClientTest(unittest.TestCase):
         self.assertEquals('pubsub.example.org', iq.getAttribute('to'))
         self.assertEquals('set', iq.getAttribute('type'))
         self.assertEquals('pubsub', iq.pubsub.name)
-        self.assertEquals(NS_PUBSUB_OWNER, iq.pubsub.uri)
+        self.assertEquals(NS_PUBSUB, iq.pubsub.uri)
         children = list(domish.generateElementsQNamed(iq.pubsub.children,
-                                                      'delete', NS_PUBSUB_OWNER))
+                                                      'delete', NS_PUBSUB))
         self.assertEquals(1, len(children))
         child = children[0]
         self.assertEquals('test', child['node'])
@@ -569,49 +569,6 @@ class PubSubServiceTest(unittest.TestCase):
 
         d = self.handleRequest(xml)
         self.assertFailure(d, error.StanzaError)
-        d.addCallback(cb)
-        return d
-
-
-    def test_onSubscriptions(self):
-        """
-        A subscriptions request should result in
-        L{PubSubService.subscriptions} being called and the result prepared
-        for the response.
-        """
-
-        xml = """
-        <iq type='get' to='pubsub.example.org'
-                       from='user@example.org'>
-          <pubsub xmlns='http://jabber.org/protocol/pubsub'>
-            <subscriptions/>
-          </pubsub>
-        </iq>
-        """
-
-        def cb(element):
-            self.assertEqual('pubsub', element.name)
-            self.assertEqual(NS_PUBSUB, element.uri)
-            self.assertEqual(NS_PUBSUB, element.subscriptions.uri)
-            children = list(element.subscriptions.elements())
-            self.assertEqual(1, len(children))
-            subscription = children[0]
-            self.assertEqual('subscription', subscription.name)
-            self.assertEqual(NS_PUBSUB, subscription.uri)
-            self.assertEqual('user@example.org', subscription['jid'])
-            self.assertEqual('test', subscription['node'])
-            self.assertEqual('subscribed', subscription['subscription'])
-
-
-        def subscriptions(requestor, service):
-            self.assertEqual(JID('user@example.org'), requestor)
-            self.assertEqual(JID('pubsub.example.org'), service)
-            subscription = pubsub.Subscription('test', JID('user@example.org'),
-                                               'subscribed')
-            return defer.succeed([subscription])
-
-        self.service.subscriptions = subscriptions
-        d = self.handleRequest(xml)
         d.addCallback(cb)
         return d
 
